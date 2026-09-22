@@ -7,9 +7,9 @@
   "modules": {
     "widgets": [
       {
-        "name": "Company Registration",
-        "location": "crm.webtab",
-        "url": "/app/widget.html",
+        "name": "Lead Enrichment",
+        "location": "crm.custombutton",
+        "url": "/app/index.html",
         "logo": ""
       }
     ]

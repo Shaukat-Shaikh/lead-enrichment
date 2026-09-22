@@ -1,0 +1,372 @@
+{
+  "info": {
+    "_postman_id": "65cbc0e4-3cc6-4c86-b8b8-857d8c31f6dc",
+    "name": "Intelligence 360 SaaS - Lead Enrichment",
+    "description": "End-to-end flow: register -> handshake -> update company (seller context) -> submit lead request -> poll result.\n\nSetup:\n\n- Set collection variable `baseUrl` (default [http://localhost:8000](http://localhost:8000))\n    \n- Import into Postman, go to Collection > Variables and set:\n    \n    - `baseUrl`: http://localhost:8000\n        \n    - `orgId`: a unique org id, e.g. ACME-001\n        \n\nScripts auto-store `licenseKey`, `accessToken`, `refreshToken`, and `requestId`.\n\nPrereq: Azurite running, Redis + Celery worker running (or TASK_EXECUTION=thread), app started with `uvicorn app:app`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "40603385",
+    "_collection_link": "https://go.postman.co/collection/40603385-65cbc0e4-3cc6-4c86-b8b8-857d8c31f6dc?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "1. Register",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var json = pm.response.json();",
+              "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+              "pm.test('Has licenseKey', function () { pm.expect(json.licenseKey).to.be.ok; });",
+              "pm.collectionVariables.set('licenseKey', json.licenseKey);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orgId\": \"{{orgId}}\",\n  \"companyName\": \"Acme Cloud Services\",\n  \"contactName\": \"Jane Admin\",\n  \"email\": \"admin@acme.com\",\n  \"phone\": \"+1-555-0100\",\n  \"aboutCompany\": \"Acme helps mid-market firms migrate to Microsoft Azure.\",\n  \"industry\": \"Cloud Services\",\n  \"productsServiceLines\": \"Azure Migration, Managed Services, Power BI\",\n  \"idealCustomerProfile\": \"Mid-market manufacturing firms\",\n  \"uniqueValueProposition\": \"Fast, fixed-price Azure migrations\",\n  \"language\": \"English\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "register"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Handshake (get tokens)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var json = pm.response.json();",
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "pm.collectionVariables.set('accessToken', json.accessToken);",
+              "pm.collectionVariables.set('refreshToken', json.refreshToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "licenseKey",
+            "value": "{{licenseKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orgId\": \"{{orgId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/handshake",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "handshake"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Validate License",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var json = pm.response.json();",
+              "pm.test('License valid', function () { pm.expect(json.valid).to.be.true; });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "licenseKey",
+            "value": "{{licenseKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/license/validate?orgId={{orgId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "license",
+            "validate"
+          ],
+          "query": [
+            {
+              "key": "orgId",
+              "value": "{{orgId}}"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "4. Update Company (seller context - CRM page)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Success true', function () { pm.expect(pm.response.json().success).to.be.true; });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "licenseKey",
+            "value": "{{licenseKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orgId\": \"{{orgId}}\",\n  \"productsServiceLines\": \"Azure Migration, Managed Services, Power BI, Copilot\",\n  \"uniqueValueProposition\": \"Fast, fixed-price Azure migrations with 24/7 support\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/company",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "company"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "5. Submit Lead Request",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var json = pm.response.json();",
+              "pm.test('Status 202', function () { pm.response.to.have.status(202); });",
+              "pm.test('Has requestId', function () { pm.expect(json.requestId).to.be.ok; });",
+              "pm.collectionVariables.set('requestId', json.requestId);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "licenseKey",
+            "value": "{{licenseKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orgId\": \"{{orgId}}\",\n  \"leadId\": \"LEAD-001\",\n  \"requestType\": \"LeadEnrichment\",\n  \"payload\": {\n    \"first_name\": \"Jon\",\n    \"last_name\": \"Appleton\",\n    \"email\": \"jon@targetco.com\",\n    \"title\": \"CIO\",\n    \"company_name\": \"TargetCo Mining\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/requests",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "requests"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "6. Poll Request Result",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var json = pm.response.json();",
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "if (json.status === 'Completed') {",
+              "  console.log('Report ready');",
+              "  pm.test('Result has html_report', function () { pm.expect(json.data.html_report).to.be.ok; });",
+              "  pm.test('No Intelegain in report', function () { pm.expect(json.data.html_report).to.not.include('Intelegain'); });",
+              "} else {",
+              "  console.log('Status: ' + json.status + ' - re-run this request to poll again');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "licenseKey",
+            "value": "{{licenseKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/requests/{{requestId}}?orgId={{orgId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "requests",
+            "{{requestId}}"
+          ],
+          "query": [
+            {
+              "key": "orgId",
+              "value": "{{orgId}}"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "7. Refresh Access Token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "var json = pm.response.json();",
+              "pm.test('Has new accessToken', function () { pm.expect(json.accessToken).to.be.ok; });",
+              "pm.collectionVariables.set('accessToken', json.accessToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "licenseKey",
+            "value": "{{licenseKey}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orgId\": \"{{orgId}}\",\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/refresh",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "refresh"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "orgId",
+      "value": "ACME-001"
+    },
+    {
+      "key": "licenseKey",
+      "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "requestId",
+      "value": ""
+    }
+  ]
+}

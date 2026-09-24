@@ -8,7 +8,7 @@ const https = require("https");
 // The Org ID retrieved by the Zoho SDK from your active Zoho CRM session:
 const ZOHO_ORG_ID = "4602803000000301993";
 const LICENSE_KEY = "LIC-2N5E-J7SH-EZA7-JAJS";
-const BASE_URL = "https://ef99-49-248-125-98.ngrok-free.app/api/v1";
+const BASE_URL = "https://796d-49-248-125-98.ngrok-free.app/api/v1";
 
 console.log("=========================================");
 console.log("  ZOHO CRM ORGANIZATION INFORMATION");

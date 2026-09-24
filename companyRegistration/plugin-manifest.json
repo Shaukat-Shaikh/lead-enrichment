@@ -3,13 +3,13 @@
   "service": "CRM",
   "crmVersion": "v2",
   "storage": false,
-  "whiteListedDomains": ["https://ef99-49-248-125-98.ngrok-free.app"],
+  "whiteListedDomains": ["https://796d-49-248-125-98.ngrok-free.app"],
   "modules": {
     "widgets": [
       {
         "name": "Lead Enrichment",
         "location": "crm.custombutton",
-        "url": "/app/index.html",
+        "url": "/app/widget.html",
         "logo": ""
       }
     ]

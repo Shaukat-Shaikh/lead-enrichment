@@ -8,7 +8,7 @@ function resolveLeadContext() {
   const params = new URLSearchParams(window.location.search);
   const urlEntity = params.get("entity");
 
-  // If entity is explicitly not Leads (e.g. Dynamics360, intelegence__name_of_lead), do not treat as lead
+  // If entity is explicitly not Leads (e.g. Dynamics360, intelligence__name_of_lead, intelegence__name_of_lead), do not treat as lead
   if (urlEntity && urlEntity.toLowerCase() !== "leads") {
     addLog(
       `Context entity is '${urlEntity}' (not 'Leads'). Skipping Lead ID assignment.`,
@@ -43,34 +43,60 @@ function resolveLeadContext() {
     return;
   }
 
-  try {
-    const stored = sessionStorage.getItem("zoho_page_data");
-    if (stored) {
-      const p = JSON.parse(stored);
-      if (p.Entity && p.Entity.toLowerCase() !== "leads") {
-        return;
-      }
-      if (p.EntityId) {
-        currentLeadId = Array.isArray(p.EntityId) ? p.EntityId[0] : p.EntityId;
-        addLog(
-          "Lead ID retrieved from sessionStorage: " + currentLeadId,
-          "info",
-        );
-      }
-    }
-  } catch (e) {}
+  return;
 }
 
 function findJobIdOnLead(lead) {
   if (!lead) return null;
 
+  // Exact API field name: intelligence360__Intelligence_JobID
+  if (
+    lead.intelligence360__Intelligence_JobID &&
+    String(lead.intelligence360__Intelligence_JobID).trim().length > 3
+  ) {
+    return String(lead.intelligence360__Intelligence_JobID).trim();
+  }
+
+  if (
+    lead[FIELD_LEAD_JOB_ID] &&
+    String(lead[FIELD_LEAD_JOB_ID]).trim().length > 3
+  ) {
+    return String(lead[FIELD_LEAD_JOB_ID]).trim();
+  }
+
+  if (
+    lead.intelligence__JobID &&
+    String(lead.intelligence__JobID).trim().length > 3
+  ) {
+    return String(lead.intelligence__JobID).trim();
+  }
+
+  if (
+    lead.intelligence__JobId &&
+    String(lead.intelligence__JobId).trim().length > 3
+  ) {
+    return String(lead.intelligence__JobId).trim();
+  }
+
+  if (
+    lead.intelegence__JobID &&
+    String(lead.intelegence__JobID).trim().length > 3
+  ) {
+    return String(lead.intelegence__JobID).trim();
+  }
+
+  if (
+    lead.intelegence__JobId &&
+    String(lead.intelegence__JobId).trim().length > 3
+  ) {
+    return String(lead.intelegence__JobId).trim();
+  }
+
   const candidateFields = [
-    FIELD_LEAD_JOB_ID,
-    "job_id",
-    "Job_ID",
-    "intelegence__jobid",
-    "RequestId",
-    "request_id",
+    FIELD_LEAD_JOB_ID, // "intelligence360__Intelligence_JobID"
+    "intelligence360__Intelligence_JobID",
+    "intelligence__JobID",
+    "intelegence__JobID",
   ];
 
   for (const f of candidateFields) {
@@ -93,47 +119,23 @@ function findJobIdOnLead(lead) {
     }
   }
 
-  // Check local storage fallback for this specific lead
-  const leadId = lead.id || currentLeadId;
-  if (leadId) {
-    const cached = localStorage.getItem("i360_job_" + leadId);
-    if (cached && cached.trim().length > 3) {
-      addLog(
-        `Retrieved jobId '${cached}' from local cache for Lead ${leadId}`,
-        "info",
-      );
-      return cached.trim();
-    }
-  }
-
   return null;
 }
 
 async function saveJobIdToLead(jobId) {
   if (!currentLeadId || !jobId) return false;
 
-  // Persist to local cache for instant bypass
-  try {
-    localStorage.setItem("i360_job_" + currentLeadId, jobId);
-  } catch (e) {}
-
-  if (currentLead) {
-    currentLead.intelegence__job_id = jobId;
-  }
-
   const candidateFields = [
-    FIELD_LEAD_JOB_ID,
-    "job_id",
-    "Job_ID",
-    "intelegence__jobid",
-    "RequestId",
-    "request_id",
+    FIELD_LEAD_JOB_ID, // "intelligence360__Intelligence_JobID"
+    "intelligence360__Intelligence_JobID",
+    "intelligence__JobID",
+    "intelegence__JobID",
   ];
 
   if (currentLead) {
     for (const k of Object.keys(currentLead)) {
       const lk = k.toLowerCase();
-      if (lk.includes("job_id") || lk.includes("jobid")) {
+      if (lk.includes("job") || lk.includes("request")) {
         if (!candidateFields.includes(k)) {
           candidateFields.unshift(k);
         }
@@ -143,40 +145,52 @@ async function saveJobIdToLead(jobId) {
 
   for (const f of candidateFields) {
     try {
-      addLog(`Writing jobId '${jobId}' to Lead field '${f}'...`, "info");
-      const updatePayload = { id: currentLeadId };
-      updatePayload[f] = jobId;
-
+      addLog(`Writing Job ID '${jobId}' to Lead field '${f}'...`, "info");
       const res = await ZOHO.CRM.API.updateRecord({
         Entity: "Leads",
-        APIData: updatePayload,
+        APIData: { id: currentLeadId, [f]: jobId },
         RecordID: currentLeadId,
       });
 
       if (res && res.data && res.data[0]) {
         const item = res.data[0];
         if (item.code === "SUCCESS" || item.status === "success") {
-          addLog(`Saved jobId into Lead field '${f}' successfully.`, "success");
-          if (currentLead) currentLead[f] = jobId;
+          addLog(
+            `Saved Job ID into Lead field '${f}' successfully.`,
+            "success",
+          );
+          if (currentLead) {
+            currentLead[f] = jobId;
+            currentLead.intelligence360__Intelligence_JobID = jobId;
+            currentLead.intelligence__JobId = jobId;
+            currentLead.intelligence__JobID = jobId;
+            currentLead.intelegence__JobId = jobId;
+            currentLead.intelegence__JobID = jobId;
+          }
           return true;
         } else {
           addLog(
-            `CRM response for field '${f}': ${item.code || item.status}`,
+            `Lead field '${f}' update response: ${item.code} (${item.message || JSON.stringify(item.details || "")})`,
             "warn",
           );
         }
+      } else {
+        addLog(
+          `Unexpected response updating Lead field '${f}': ${JSON.stringify(res)}`,
+          "warn",
+        );
       }
     } catch (e) {
       addLog(
-        `Could not update Lead field '${f}': ${e.message || JSON.stringify(e)}`,
+        `Exception updating Lead field '${f}': ${e.message || JSON.stringify(e)}`,
         "warn",
       );
     }
   }
 
   addLog(
-    `Notice: Lead field '${FIELD_LEAD_JOB_ID}' may not be created in CRM yet. Saved into local cache.`,
-    "warn",
+    `Warning: Job ID could not be saved to any Lead candidate field. Available Lead keys: [${currentLead ? Object.keys(currentLead).join(", ") : "none"}]`,
+    "error",
   );
   return false;
 }
@@ -186,6 +200,14 @@ async function saveJobIdToLead(jobId) {
 // ---------------------------------------------------------------
 async function startEnrichment(forceNew = false) {
   clearError();
+  if (!licenseKey || String(licenseKey).trim().length === 0) {
+    addLog(
+      "startEnrichment called without a valid license. Redirecting to Registration.",
+      "warn",
+    );
+    switchView("registration");
+    return;
+  }
   document.getElementById("reportCard").style.display = "none";
   document.getElementById("rawResultCard").style.display = "none";
   document.getElementById("queuedCard").style.display = "none";
@@ -193,12 +215,6 @@ async function startEnrichment(forceNew = false) {
   document.getElementById("statusBadge").className = "badge badge-progress";
 
   addLog(`Beginning Lead Enrichment process (forceNew=${forceNew})...`, "info");
-
-  if (forceNew && currentLeadId) {
-    try {
-      localStorage.removeItem("i360_job_" + currentLeadId);
-    } catch (e) {}
-  }
 
   try {
     // Resolve Lead context
@@ -230,6 +246,11 @@ async function startEnrichment(forceNew = false) {
     }
     currentLead = leadRes.data[0];
 
+    addLog(
+      `Lead record loaded. Job ID: "${currentLead[FIELD_LEAD_JOB_ID] || "None"}"`,
+      "info",
+    );
+
     const firstName = currentLead.First_Name || "";
     const lastName = currentLead.Last_Name || "";
     const fullName =
@@ -245,33 +266,20 @@ async function startEnrichment(forceNew = false) {
     document.getElementById("leadName").textContent = fullName;
     document.getElementById("leadSub").textContent = `${company} • ${email}`;
 
-    // Check if HTML report is already saved in CRM on this lead
-    const savedHtml = currentLead[FIELD_LEAD_REPORT_HTML];
-    if (
-      !forceNew &&
-      savedHtml &&
-      typeof savedHtml === "string" &&
-      savedHtml.trim().length > 50
-    ) {
-      addLog(
-        "Found existing HTML report on Lead record. Rendering immediately.",
-        "success",
-      );
-      displayReport(savedHtml, findJobIdOnLead(currentLead));
-      return;
-    }
-
     // -------------------------------------------------------------
-    // CHECK IF JOB ID IS ALREADY STORED ON THIS LEAD
+    // CHECK IF JOB ID IS ALREADY STORED ON THIS LEAD (intelligence__JobID / intelegence__JobId)
     // -------------------------------------------------------------
     const existingJobId = findJobIdOnLead(currentLead);
     if (existingJobId && !forceNew) {
       addLog(
-        `Existing Job ID detected on Lead (${existingJobId}). Calling polling API to check for result...`,
+        `Existing Job ID detected on Lead in '${FIELD_LEAD_JOB_ID}' (${existingJobId}). Skipping POST /requests. Checking status directly...`,
         "info",
       );
       activeJobId = existingJobId;
-      showQueuedNotice(existingJobId, fullName);
+      showEnrichmentLoading(
+        "Loading Intelligence Report...",
+        "Checking status and retrieving report...",
+      );
       await fetchAndShowJobResult(existingJobId, fullName);
       return;
     }
@@ -288,14 +296,8 @@ async function startEnrichment(forceNew = false) {
       );
     }
 
-    // Ensure tokens exist and are fresh (perform handshake if missing or expired)
-    if (!accessToken || isTokenExpired(accessToken)) {
-      addLog(
-        "Access token missing or expired. Executing /auth/handshake with server...",
-        "api",
-      );
-      await doHandshake();
-    }
+    // Ensure CRM tokens exist and are fresh (reusing valid tokens, refreshing, or handshaking as needed)
+    await ensureValidTokens();
 
     const payload = {
       orgId: String(orgId || "ZOHO-ORG"),
@@ -311,28 +313,7 @@ async function startEnrichment(forceNew = false) {
     };
 
     addLog(`Sending POST ${REQUESTS_URL}`, "api", payload);
-    let reqRes;
-    try {
-      reqRes = await makeAuthorizedPost(REQUESTS_URL, payload);
-    } catch (netErr) {
-      addLog(
-        "Initial POST network failed (" +
-          netErr.message +
-          "). Refreshing token and retrying...",
-        "warn",
-      );
-      await doHandshake();
-      reqRes = await makeAuthorizedPost(REQUESTS_URL, payload);
-    }
-
-    if (reqRes.status === 401) {
-      addLog(
-        "Server returned 401 Unauthorized. Refreshing token handshake...",
-        "warn",
-      );
-      await doHandshake();
-      reqRes = await makeAuthorizedPost(REQUESTS_URL, payload);
-    }
+    const reqRes = await makeAuthorizedPost(REQUESTS_URL, payload);
 
     const reqText = await reqRes.text().catch(() => "");
     let reqData = null;
@@ -367,12 +348,12 @@ async function startEnrichment(forceNew = false) {
 
     const jobId = reqData && (reqData.jobId || reqData.requestId || reqData.id);
 
-    // Save jobId to Lead record immediately as requested by user
+    // Save jobId to Lead record field 'intelligence__JobID' / 'intelegence__JobId' immediately
     if (jobId) {
       await saveJobIdToLead(jobId);
     }
 
-    // If server returned failure or error message directly (e.g. ANTHROPIC_API_KEY missing)
+    // If server returned failure or error message directly
     if (reqData && (reqData.status === "Failed" || reqData.errorMessage)) {
       const errDetail =
         reqData.errorMessage ||
@@ -391,7 +372,7 @@ async function startEnrichment(forceNew = false) {
 
     addLog(`Enrichment request accepted! Assigned Job ID: ${jobId}`, "success");
 
-    // 1st time: Do not poll. Show 8-10 minute notice card with refresh button!
+    // Show 8-10 minute notice card with refresh button
     showQueuedNotice(jobId, fullName);
   } catch (err) {
     addLog("Lead Enrichment failure: " + (err.message || err), "error");
@@ -413,8 +394,40 @@ async function startEnrichment(forceNew = false) {
   }
 }
 
+function showEnrichmentLoading(
+  title = "Loading Intelligence Report...",
+  desc = "Checking status and retrieving report...",
+) {
+  const loadingCard = document.getElementById("enrichmentLoadingCard");
+  if (loadingCard) loadingCard.style.display = "block";
+
+  const titleEl = document.getElementById("enrichmentLoadingTitle");
+  if (titleEl) titleEl.textContent = title;
+  const descEl = document.getElementById("enrichmentLoadingDesc");
+  if (descEl) descEl.textContent = desc;
+
+  const queuedCard = document.getElementById("queuedCard");
+  if (queuedCard) queuedCard.style.display = "none";
+  const reportCard = document.getElementById("reportCard");
+  if (reportCard) reportCard.style.display = "none";
+  const rawResultCard = document.getElementById("rawResultCard");
+  if (rawResultCard) rawResultCard.style.display = "none";
+
+  const statusBadge = document.getElementById("statusBadge");
+  if (statusBadge) {
+    statusBadge.textContent = "Checking...";
+    statusBadge.className = "badge badge-progress";
+  }
+}
+
+function hideEnrichmentLoading() {
+  const loadingCard = document.getElementById("enrichmentLoadingCard");
+  if (loadingCard) loadingCard.style.display = "none";
+}
+
 function showQueuedNotice(jobId, fullName) {
   activeJobId = jobId || activeJobId;
+  hideEnrichmentLoading();
   document.getElementById("reportCard").style.display = "none";
   document.getElementById("rawResultCard").style.display = "none";
 
@@ -468,7 +481,6 @@ async function fetchAndShowJobResult(jobId, fullName = "") {
   const getUrl = `${REQUESTS_URL}/${encodeURIComponent(jobId)}?orgId=${encodeURIComponent(orgId || "ZOHO-ORG")}`;
   addLog(`Calling GET ${getUrl}...`, "api");
 
-  // NO BUFFER! Keep queued card visible and update button + feedback message
   const btn = document.getElementById("btnPollStatus");
   if (btn) {
     btn.disabled = true;
@@ -482,64 +494,23 @@ async function fetchAndShowJobResult(jobId, fullName = "") {
     feedback.textContent = "Checking whether report data is prepared...";
   }
 
-  if (!accessToken || isTokenExpired(accessToken)) {
-    try {
-      await doHandshake();
-    } catch (e) {}
-  }
-
   let res;
   try {
-    res = await fetch(getUrl, {
-      method: "GET",
-      headers: {
-        Authorization: "Bearer " + accessToken,
-        licenseKey: licenseKey,
-        "ngrok-skip-browser-warning": "69420",
-      },
-    });
+    res = await makeAuthorizedGet(getUrl);
   } catch (netErr) {
-    addLog(
-      "Initial GET failed (" +
-        netErr.message +
-        "). Refreshing handshake and retrying...",
-      "warn",
-    );
-    try {
-      await doHandshake();
-      res = await fetch(getUrl, {
-        method: "GET",
-        headers: {
-          Authorization: "Bearer " + accessToken,
-          licenseKey: licenseKey,
-          "ngrok-skip-browser-warning": "69420",
-        },
-      });
-    } catch (retryErr) {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "🔄 Refresh / Check Status";
-      }
-      if (feedback) {
-        feedback.style.color = "#dc2626";
-        feedback.textContent =
-          "Could not connect to backend server. Make sure ngrok is online.";
-      }
-      return;
+    addLog("GET request failed: " + (netErr.message || netErr), "error");
+    showQueuedNotice(jobId, fullName);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🔄 Refresh / Check Status";
     }
-  }
-
-  if (res.status === 401) {
-    addLog("GET returned 401 Unauthorized. Refreshing token...", "warn");
-    await doHandshake();
-    res = await fetch(getUrl, {
-      method: "GET",
-      headers: {
-        Authorization: "Bearer " + accessToken,
-        licenseKey: licenseKey,
-        "ngrok-skip-browser-warning": "69420",
-      },
-    });
+    if (feedback) {
+      feedback.style.display = "block";
+      feedback.style.color = "#dc2626";
+      feedback.textContent =
+        "Could not connect to backend server. Make sure ngrok is online.";
+    }
+    return;
   }
 
   const rawText = await res.text().catch(() => "");
@@ -565,22 +536,41 @@ async function fetchAndShowJobResult(jobId, fullName = "") {
     displayReport(rawText, jobId);
     document.getElementById("statusBadge").textContent = "Completed";
     document.getElementById("statusBadge").className = "badge badge-success";
-    await saveReportToLead(rawText);
     return;
   }
 
   // Case 2: JSON response
   if (data) {
-    const htmlReport = (data.data && data.data.html_report) || data.html_report;
+    const htmlReport =
+      (data.data &&
+        (data.data.html_report ||
+          data.data.html ||
+          data.data.report ||
+          data.data.htmlReport)) ||
+      data.html_report ||
+      data.htmlReport ||
+      data.html ||
+      data.report;
+
+    const isHtmlString =
+      typeof htmlReport === "string" &&
+      htmlReport.trim().length > 30 &&
+      (htmlReport.includes("<div") ||
+        htmlReport.includes("<p") ||
+        htmlReport.includes("<table") ||
+        htmlReport.includes("<!DOCTYPE") ||
+        htmlReport.includes("<html") ||
+        htmlReport.includes("</"));
+
     if (
-      (data.status === "Completed" || data.status === "success") &&
-      htmlReport
+      ((data.status === "Completed" || data.status === "success") &&
+        htmlReport) ||
+      isHtmlString
     ) {
       addLog("Received Completed status with HTML report.", "success");
       displayReport(htmlReport, jobId);
       document.getElementById("statusBadge").textContent = "Completed";
       document.getElementById("statusBadge").className = "badge badge-success";
-      await saveReportToLead(htmlReport);
       return;
     }
 
@@ -597,10 +587,7 @@ async function fetchAndShowJobResult(jobId, fullName = "") {
         `Job ${jobId} is in progress (status: ${data.status}). Notice updated.`,
         "info",
       );
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "🔄 Refresh / Check Status";
-      }
+      showQueuedNotice(jobId, fullName);
       if (feedback) {
         feedback.style.display = "block";
         feedback.style.color = "#0369a1";
@@ -630,6 +617,7 @@ async function fetchAndShowJobResult(jobId, fullName = "") {
 function displayRawResult(data, jobId, httpStatus = 200) {
   activeJobId = jobId || "";
   currentRawData = data;
+  hideEnrichmentLoading();
 
   document.getElementById("reportCard").style.display = "none";
   document.getElementById("queuedCard").style.display = "none";
@@ -728,27 +716,7 @@ async function pollForResult(requestId) {
       pDesc.textContent = `Analyzing signals and building intelligence report (${attempts * 3}s)...`;
     }
 
-    let res = await fetch(pollUrl, {
-      method: "GET",
-      headers: {
-        Authorization: "Bearer " + accessToken,
-        licenseKey: licenseKey,
-        "ngrok-skip-browser-warning": "69420",
-      },
-    });
-
-    if (res.status === 401) {
-      addLog("Poll returned 401 Unauthorized. Refreshing token...", "warn");
-      await doHandshake();
-      res = await fetch(pollUrl, {
-        method: "GET",
-        headers: {
-          Authorization: "Bearer " + accessToken,
-          licenseKey: licenseKey,
-          "ngrok-skip-browser-warning": "69420",
-        },
-      });
-    }
+    let res = await makeAuthorizedGet(pollUrl);
 
     if (!res.ok) {
       addLog(`Poll #${attempts} returned HTTP ${res.status}`, "warn");
@@ -777,51 +745,89 @@ async function pollForResult(requestId) {
   );
 }
 
-async function saveReportToLead(htmlContent) {
-  try {
-    addLog(
-      `Updating Lead ${currentLeadId} with report HTML in '${FIELD_LEAD_REPORT_HTML}'...`,
-      "info",
-    );
-    const updateRes = await ZOHO.CRM.API.updateRecord({
-      Entity: "Leads",
-      APIData: {
-        id: currentLeadId,
-        [FIELD_LEAD_REPORT_HTML]: htmlContent,
-      },
-      RecordID: currentLeadId,
-    });
-    addLog("CRM Lead update response: " + JSON.stringify(updateRes), "success");
-  } catch (e) {
-    addLog(
-      "Could not save to Lead custom field (field may need creation): " +
-        JSON.stringify(e),
-      "warn",
-    );
-  }
-}
-
 function displayReport(htmlContent, jobId) {
   rawReportHtml = htmlContent;
   if (jobId) activeJobId = jobId;
+  hideEnrichmentLoading();
   document.getElementById("queuedCard").style.display = "none";
   document.getElementById("rawResultCard").style.display = "none";
   document.getElementById("reportCard").style.display = "block";
 
+  const statusBadge = document.getElementById("statusBadge");
+  if (statusBadge) {
+    statusBadge.textContent = "Completed";
+    statusBadge.className = "badge badge-success";
+  }
+
   const frame = document.getElementById("reportFrame");
   if (!frame) return;
+
+  function updateFrameHeight() {
+    try {
+      const d = frame.contentDocument || frame.contentWindow.document;
+      if (!d || !d.body) return;
+
+      const header = d.querySelector(".brandbar");
+      const report = d.querySelector(".report");
+      const footer = d.querySelector(".brandfoot") || d.querySelector("footer");
+
+      let totalHeight = 0;
+      if (report) {
+        const headerH = header ? header.offsetHeight : 0;
+        const reportH = report.offsetHeight || 0;
+        const footerH = footer ? footer.offsetHeight : 0;
+        totalHeight = headerH + reportH + footerH + 20;
+      } else {
+        totalHeight = Math.max(
+          d.body.scrollHeight,
+          d.documentElement.scrollHeight,
+        );
+      }
+
+      if (totalHeight > 250) {
+        frame.style.height = totalHeight + "px";
+      }
+    } catch (e) {}
+  }
 
   const doc = frame.contentDocument || frame.contentWindow.document;
   doc.open();
   doc.write(htmlContent);
   doc.close();
 
-  setTimeout(() => {
-    try {
-      const h = doc.body.scrollHeight;
-      if (h > 400) frame.style.height = h + 40 + "px";
-    } catch (e) {}
-  }, 500);
+  try {
+    if (doc.documentElement) doc.documentElement.style.overflow = "hidden";
+    if (doc.body) doc.body.style.overflow = "hidden";
+  } catch (e) {}
+
+  // Run dynamic height adjustment at staggered intervals for image/font rendering
+  setTimeout(updateFrameHeight, 60);
+  setTimeout(updateFrameHeight, 200);
+  setTimeout(updateFrameHeight, 600);
+
+  // Hook into tab switching inside the iframe
+  try {
+    const tabs = doc.querySelectorAll(".tab");
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        // Recalculate as soon as the tab switch changes active section
+        setTimeout(updateFrameHeight, 30);
+        setTimeout(updateFrameHeight, 150);
+      });
+    });
+
+    // Also observe DOM changes (class toggles like .visible) inside the report container
+    if (doc.defaultView && doc.defaultView.MutationObserver) {
+      const observer = new doc.defaultView.MutationObserver(() => {
+        updateFrameHeight();
+      });
+      observer.observe(doc.body, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+      });
+    }
+  } catch (e) {}
 }
 
 function copyReport() {

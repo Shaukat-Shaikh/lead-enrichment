@@ -16,7 +16,10 @@ function updateNavState() {
 }
 
 function switchView(viewName) {
-  if (viewName === "enrichment" && !licenseKey) {
+  if (
+    viewName === "enrichment" &&
+    (!licenseKey || String(licenseKey).trim().length === 0)
+  ) {
     addLog(
       "Blocked access to Lead Enrichment: License registration required.",
       "warn",
@@ -53,10 +56,6 @@ function clearError() {
   document.getElementById("errorCard").style.display = "none";
 }
 
-function setStep(num) {
-  // Step progress line removed per user request
-}
-
 // ---------------------------------------------------------------
 // ZOHO EMBEDDED APP SDK INIT
 // ---------------------------------------------------------------
@@ -68,9 +67,6 @@ if (typeof ZOHO !== "undefined") {
   ZOHO.embeddedApp.on("PageLoad", function (data) {
     addLog("PageLoad event received from CRM", "success", data);
     zohoPageData = data;
-    try {
-      sessionStorage.setItem("zoho_page_data", JSON.stringify(data));
-    } catch (e) {}
   });
 
   addLog("Calling ZOHO.embeddedApp.init()...", "info");
@@ -97,6 +93,7 @@ if (typeof ZOHO !== "undefined") {
 // ---------------------------------------------------------------
 async function bootstrap() {
   clearError();
+  purgeBrowserStorage();
   addLog("Starting Intelligence 360 App Bootstrap...", "info");
 
   try {
@@ -113,18 +110,33 @@ async function bootstrap() {
     } catch (e) {
       addLog("Could not fetch Org Info from Zoho: " + (e.message || e), "warn");
     }
-    if (!orgId) {
-      orgId = localStorage.getItem("i360_org_id") || "";
-      if (orgId)
-        addLog("Using cached Org ID from local storage: " + orgId, "info");
+
+    // Inspect module metadata to verify exact field API names from Zoho CRM
+    try {
+      const meta = await ZOHO.CRM.META.getFields({
+        Entity: CRM_LICENSE_MODULE,
+      });
+      if (meta && Array.isArray(meta.fields)) {
+        addLog(
+          `Module '${CRM_LICENSE_MODULE}' fields: ` +
+            meta.fields.map((f) => `${f.api_name} (${f.data_type})`).join(", "),
+          "info",
+        );
+      }
+    } catch (metaErr) {
+      addLog(
+        "META.getFields notice: " +
+          (metaErr.message || JSON.stringify(metaErr)),
+        "info",
+      );
     }
 
-    // Check if License exists in Zoho CRM module
-    addLog("Checking custom module for existing license key...", "info");
+    // Check if License exists in Zoho CRM module intelligence360__Intelligence_360
+    addLog("Checking CRM for existing license key...", "info");
     const hasLicense = await checkAndLoadLicense();
     updateNavState();
 
-    if (hasLicense) {
+    if (hasLicense && licenseKey && String(licenseKey).trim().length > 0) {
       resolveLeadContext();
       if (currentLeadId) {
         addLog(
@@ -142,7 +154,14 @@ async function bootstrap() {
         const successBox = document.getElementById("regSuccessBox");
         if (successBox) {
           successBox.style.display = "block";
-          successBox.innerHTML = `License Active<br><br>Company is already registered.<br><span style="font-size:0.85rem;color:#475569;">To enrich leads, open any Lead in Zoho CRM and click the <strong>Lead Enrichment</strong> button.</span>`;
+          successBox.innerHTML = `
+            <div style="text-align: center; padding: 12px 0;">
+              <div style="font-size: 1.8rem; margin-bottom: 6px;">🛡️</div>
+              <strong style="color: #166534; font-size: 1.05rem;">License Active</strong>
+              <p style="margin: 8px 0; font-size: 0.9rem; color: #475569;">
+                Company is already registered.<br>To enrich leads, open any Lead in Zoho CRM and click the <strong>Lead Enrichment</strong> button.
+              </p>
+            </div>`;
         }
         const submitBtn = document.getElementById("submitRegBtn");
         if (submitBtn) {
@@ -154,10 +173,21 @@ async function bootstrap() {
         "No active license found in CRM. Lead Enrichment locked. Showing Registration.",
         "warn",
       );
+      licenseKey = "";
       switchView("registration");
+      const successBox = document.getElementById("regSuccessBox");
+      if (successBox) successBox.style.display = "none";
+      const statusBox = document.getElementById("regStatusBox");
+      if (statusBox) statusBox.style.display = "none";
+      const submitBtn = document.getElementById("submitRegBtn");
+      if (submitBtn) {
+        submitBtn.textContent = "Register & Activate License";
+        submitBtn.disabled = false;
+      }
     }
   } catch (err) {
     addLog("Bootstrap exception: " + (err.message || err), "error");
+    licenseKey = "";
     switchView("registration");
     showError(
       "Startup error: " + (err.message || err),
@@ -172,6 +202,7 @@ async function bootstrap() {
 // DOM READY INITIALIZATION
 // ---------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", () => {
+  purgeBrowserStorage();
   initRegistrationForm();
   bootstrap();
 });

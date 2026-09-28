@@ -31,24 +31,46 @@ function initRegistrationForm() {
       const cName = document.getElementById("companyName").value.trim();
       const cleanDomain =
         cName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "company";
+
+      const rawProducts =
+        (document.getElementById("productsServiceLines") &&
+          document.getElementById("productsServiceLines").value) ||
+        "";
+      const productsList = rawProducts
+        ? rawProducts
+            .split(/[,\n]/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+        : [];
+      if (productsList.length === 0 && rawProducts.trim().length > 0) {
+        productsList.push(rawProducts.trim());
+      }
+
       const payload = {
         orgId: String(orgId),
         companyName: cName,
         contactName: cName + " Admin",
         email: "admin@" + cleanDomain + ".com",
         phone: "",
-        aboutCompany: document.getElementById("aboutCompany").value.trim(),
-        industry: document.getElementById("industry").value.trim(),
-        productsServiceLines: document
-          .getElementById("productsServiceLines")
-          .value.trim(),
-        idealCustomerProfile: document
-          .getElementById("idealCustomerProfile")
-          .value.trim(),
-        uniqueValueProposition: document
-          .getElementById("uniqueValueProposition")
-          .value.trim(),
-        language: document.getElementById("language").value || "English",
+        aboutCompany: document.getElementById("aboutCompany")
+          ? document.getElementById("aboutCompany").value.trim()
+          : "",
+        industry: document.getElementById("industry")
+          ? document.getElementById("industry").value.trim()
+          : "",
+        productsServiceLines: productsList,
+        idealCustomerProfile: document.getElementById("idealCustomerProfile")
+          ? document.getElementById("idealCustomerProfile").value.trim()
+          : "",
+        uniqueValueProposition: document.getElementById(
+          "uniqueValueProposition",
+        )
+          ? document.getElementById("uniqueValueProposition").value.trim()
+          : "",
+        language:
+          (document.getElementById("language") &&
+            document.getElementById("language").value) ||
+          "English",
       };
 
       addLog(`POST ${REGISTER_URL}`, "api", payload);
@@ -61,27 +83,31 @@ function initRegistrationForm() {
         },
         body: JSON.stringify(payload),
       });
-      if (!regRes.ok)
+
+      if (!regRes.ok) {
         throw new Error(
           "Registration failed: " + (await regRes.text().catch(() => "")),
         );
+      }
       const regData = await regRes.json();
       licenseKey = regData.licenseKey || regData.license_key;
-      if (!licenseKey)
+      if (!licenseKey) {
         throw new Error("No licenseKey returned: " + JSON.stringify(regData));
+      }
 
       addLog(`Registration succeeded! License Key: ${licenseKey}`, "success");
 
+      // Execute handshake immediately to get active tokens
       statusBox.textContent = "Authenticating handshake...";
       await doHandshake();
 
-      statusBox.textContent = "Saving license to Zoho CRM...";
+      statusBox.textContent = "Saving license and tokens to Zoho CRM...";
       const targetMod = resolvedLicenseModule || CRM_LICENSE_MODULE;
+
+      // Find existing record to update (same as Friday's simple approach)
       let existingId = null;
       try {
-        const all = await ZOHO.CRM.API.getAllRecords({
-          Entity: targetMod,
-        });
+        const all = await ZOHO.CRM.API.getAllRecords({ Entity: targetMod });
         if (all && all.data && all.data.length > 0) {
           const matched = all.data.find((r) => {
             const n = (r.Name || "").trim().toLowerCase();
@@ -102,6 +128,7 @@ function initRegistrationForm() {
         }
       } catch (e) {}
 
+      // ALL fields in ONE single payload (this is how it worked on Friday)
       const crmData = {
         Name: "lisense key",
         [FIELD_LICENSE_KEY]: licenseKey,
@@ -113,35 +140,42 @@ function initRegistrationForm() {
       try {
         if (existingId) {
           crmData.id = existingId;
+          licenseRecordId = existingId;
           addLog(
-            `Updating existing record ${existingId} with Name 'lisense key' & Org ID in ${targetMod}...`,
+            `Updating existing record ${existingId} with ALL fields in ONE call in ${targetMod}...`,
             "info",
           );
-          await ZOHO.CRM.API.updateRecord({
+          const updRes = await ZOHO.CRM.API.updateRecord({
             Entity: targetMod,
             APIData: crmData,
             RecordID: existingId,
           });
+          addLog(`Update response: ${JSON.stringify(updRes)}`, "info");
         } else {
           addLog(
-            `Inserting new record with Name 'lisense key' & Org ID into ${targetMod}...`,
+            `Inserting new record with ALL fields in ONE call into ${targetMod}...`,
             "info",
           );
-          await ZOHO.CRM.API.insertRecord({
+          const insRes = await ZOHO.CRM.API.insertRecord({
             Entity: targetMod,
             APIData: crmData,
           });
+          addLog(`Insert response: ${JSON.stringify(insRes)}`, "info");
+          const item = insRes && insRes.data && insRes.data[0];
+          if (item && item.details && item.details.id) {
+            licenseRecordId = item.details.id;
+          }
         }
         addLog(
-          "Saved license, tokens, and Organization ID to CRM module successfully with Name 'lisense key'.",
+          "Saved license, tokens, and Organization ID to CRM module successfully.",
           "success",
         );
       } catch (e) {
         addLog(
-          "Saving Org ID to CRM failed (field may need creation). Attempting without Org ID: " +
-            JSON.stringify(e),
+          "Full save failed, trying without Org ID: " + JSON.stringify(e),
           "warn",
         );
+        // Fallback: try without Org ID field
         const fallback = {
           Name: "lisense key",
           [FIELD_LICENSE_KEY]: licenseKey,
@@ -157,38 +191,70 @@ function initRegistrationForm() {
               RecordID: existingId,
             });
           } else {
-            await ZOHO.CRM.API.insertRecord({
+            const insRes = await ZOHO.CRM.API.insertRecord({
               Entity: targetMod,
               APIData: fallback,
             });
+            const item = insRes && insRes.data && insRes.data[0];
+            if (item && item.details && item.details.id) {
+              licenseRecordId = item.details.id;
+            }
           }
           addLog(
-            "Saved license and tokens to CRM module (without Org ID field).",
+            "Saved license and tokens to CRM (without Org ID).",
             "success",
           );
         } catch (tokenErr) {
-          const minimalFallback = {
+          addLog(
+            "Token save also failed, trying minimal: " +
+              JSON.stringify(tokenErr),
+            "warn",
+          );
+          // Last resort: just license key
+          const minimal = {
             Name: "lisense key",
             [FIELD_LICENSE_KEY]: licenseKey,
           };
           if (existingId) {
-            minimalFallback.id = existingId;
+            minimal.id = existingId;
             await ZOHO.CRM.API.updateRecord({
               Entity: targetMod,
-              APIData: minimalFallback,
+              APIData: minimal,
               RecordID: existingId,
             });
           } else {
             await ZOHO.CRM.API.insertRecord({
               Entity: targetMod,
-              APIData: minimalFallback,
+              APIData: minimal,
             });
           }
         }
       }
 
-      localStorage.setItem("i360_license_key", licenseKey);
-      localStorage.setItem("i360_org_id", String(orgId));
+      // Verify the license key was actually saved by reading back
+      if (licenseRecordId) {
+        try {
+          const verifyRes = await ZOHO.CRM.API.getRecord({
+            Entity: targetMod,
+            RecordID: licenseRecordId,
+          });
+          const rec = verifyRes && verifyRes.data && verifyRes.data[0];
+          if (rec) {
+            const storedLic = rec[FIELD_LICENSE_KEY] || "";
+            addLog(
+              `VERIFICATION: Record ${licenseRecordId} field '${FIELD_LICENSE_KEY}' = '${storedLic}'`,
+              storedLic ? "success" : "error",
+            );
+          }
+        } catch (verErr) {
+          addLog(
+            `Verification read-back error: ${verErr.message || verErr}`,
+            "warn",
+          );
+        }
+      }
+
+      purgeBrowserStorage();
 
       statusBox.style.display = "none";
       successBox.style.display = "block";
@@ -219,3 +285,32 @@ function initRegistrationForm() {
     }
   });
 }
+
+// ---------------------------------------------------------------
+// CLOSE WIDGET WINDOW HELPER
+// ---------------------------------------------------------------
+async function closeEntireWidget() {
+  addLog("Executing closeEntireWidget()...", "info");
+  try {
+    if (
+      window.ZOHO &&
+      ZOHO.CRM &&
+      ZOHO.CRM.UI &&
+      ZOHO.CRM.UI.Popup &&
+      typeof ZOHO.CRM.UI.Popup.close === "function"
+    ) {
+      addLog("Calling ZOHO.CRM.UI.Popup.close()...", "info");
+      await ZOHO.CRM.UI.Popup.close();
+      return;
+    }
+  } catch (e) {
+    addLog("ZOHO.CRM.UI.Popup.close failed: " + (e.message || e), "warn");
+  }
+
+  try {
+    window.close();
+  } catch (e) {
+    addLog("window.close() failed: " + (e.message || e), "warn");
+  }
+}
+window.closeEntireWidget = closeEntireWidget;

@@ -76,6 +76,32 @@
           </div>
         </div>
 
+        <!-- Loading state while checking status of existing job -->
+        <div
+          id="enrichmentLoadingCard"
+          class="queued-card"
+          style="display: none"
+        >
+          <div class="spinner" style="margin: 0 auto 14px"></div>
+          <h3
+            id="enrichmentLoadingTitle"
+            style="
+              margin: 0 0 6px;
+              color: #0f172a;
+              font-size: 1.15rem;
+              font-weight: 600;
+            "
+          >
+            Loading Intelligence Report...
+          </h3>
+          <p
+            id="enrichmentLoadingDesc"
+            style="color: #64748b; font-size: 0.9rem; margin: 0"
+          >
+            Checking status and retrieving report...
+          </p>
+        </div>
+
         <!-- Queued / In-Progress Card (shown after request is queued, informs user of 8-10 min window with refresh button) -->
         <div id="queuedCard" class="queued-card" style="display: none">
           <div style="font-size: 2.2rem; margin-bottom: 8px">⏳</div>
@@ -194,7 +220,7 @@
               <button onclick="startEnrichment(true)">Re-Run Analysis</button>
             </div>
           </div>
-          <iframe id="reportFrame" class="report-frame"></iframe>
+          <iframe id="reportFrame" class="report-frame" scrolling="no"></iframe>
         </div>
       </div>
 

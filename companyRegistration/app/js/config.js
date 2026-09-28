@@ -3,26 +3,32 @@
 // ---------------------------------------------------------------
 // CONFIGURATION & CONSTANTS
 // ---------------------------------------------------------------
-const BASE_URL = "https://796d-49-248-125-98.ngrok-free.app/api/v1";
+const BASE_URL = "https://3d16-49-248-125-98.ngrok-free.app/api/v1";
 const REGISTER_URL = BASE_URL + "/register";
 const HANDSHAKE_URL = BASE_URL + "/auth/handshake";
 const REQUESTS_URL = BASE_URL + "/requests";
 const REFRESH_URL = BASE_URL + "/auth/refresh";
 const VALIDATE_URL = BASE_URL + "/license/validate";
 
-const CRM_LICENSE_MODULE = "intelegence__name_of_lead";
-const FIELD_LICENSE_KEY = "intelegence__enrichment_lisense";
-const FIELD_ACCESS_TOKEN = "intelegence__access_token";
-const FIELD_REFRESH_TOKEN = "intelegence__refresh_token";
-const FIELD_LEAD_REPORT_HTML = "intelegence__enrichment_html";
-const FIELD_LEAD_JOB_ID = "intelegence__job_id";
-const FIELD_ORG_ID = "intelegence__Organisation_ID";
+// Exact CRM Module & Field API Names as defined in Zoho CRM Developer Console
+const CRM_LICENSE_MODULE = "intelligence360__Intelligence_360";
+const CRM_LICENSE_MODULE_FALLBACK = "intelligence__name_of_lead";
+const LICENSE_RECORD_NAME = "lisense key";
+
+const FIELD_LICENSE_KEY = "intelligence360__Enrichment_License";
+const FIELD_LICENSE_KEY_FALLBACK = "intelligence__enrichment_license";
+const FIELD_ACCESS_TOKEN = "intelligence360__Access_Token";
+const FIELD_REFRESH_TOKEN = "intelligence360__Refresh_Token";
+const FIELD_ORG_ID = "intelligence360__Organisation_ID";
+
+// Exact Lead Module field for Job ID
+const FIELD_LEAD_JOB_ID = "intelligence360__Intelligence_JobID";
 
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLL_ATTEMPTS = 40;
 
 // ---------------------------------------------------------------
-// SHARED APPLICATION STATE
+// SHARED APPLICATION STATE (IN-MEMORY ONLY)
 // ---------------------------------------------------------------
 let zohoPageData = null;
 let currentLead = null;
@@ -35,10 +41,33 @@ let rawReportHtml = "";
 let activeJobId = "";
 let currentRawData = null;
 let resolvedLicenseModule = CRM_LICENSE_MODULE;
+let licenseRecordId = null;
 
 // ---------------------------------------------------------------
-// UTILITIES
+// SECURITY: PURGE BROWSER STORAGE (NO CREDENTIALS IN LOCALSTORAGE)
 // ---------------------------------------------------------------
+function purgeBrowserStorage() {
+  try {
+    localStorage.removeItem("i360_license_key");
+    localStorage.removeItem("i360_org_id");
+    localStorage.removeItem("i360_access_token");
+    localStorage.removeItem("i360_refresh_token");
+    sessionStorage.removeItem("zoho_page_data");
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (
+        k &&
+        (k.startsWith("i360_") ||
+          k.includes("token") ||
+          k.includes("license") ||
+          k.includes("job"))
+      ) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch (e) {}
+}
+
 function escapeHtml(text) {
   if (!text) return "";
   const div = document.createElement("div");

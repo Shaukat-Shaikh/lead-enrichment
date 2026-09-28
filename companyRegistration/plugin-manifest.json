@@ -3,7 +3,7 @@
   "service": "CRM",
   "crmVersion": "v2",
   "storage": false,
-  "whiteListedDomains": ["https://796d-49-248-125-98.ngrok-free.app"],
+  "whiteListedDomains": ["https://3d16-49-248-125-98.ngrok-free.app"],
   "modules": {
     "widgets": [
       {

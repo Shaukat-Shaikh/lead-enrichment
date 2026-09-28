@@ -219,9 +219,11 @@ body {
 }
 .report-frame {
   width: 100%;
-  min-height: 600px;
+  min-height: 350px;
   border: none;
   display: block;
+  overflow: hidden;
+  transition: height 0.15s ease-out;
 }
 
 /* Error Card */

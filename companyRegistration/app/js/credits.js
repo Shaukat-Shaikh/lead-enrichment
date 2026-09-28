@@ -37,38 +37,13 @@ async function loadCreditsData() {
         orgId = (o && o.org && o.org[0] && o.org[0].id) || "";
       } catch (e) {}
     }
-    if (!orgId) orgId = localStorage.getItem("i360_org_id") || "ZOHO-ORG";
+    if (!orgId) orgId = "ZOHO-ORG";
     if (!licenseKey) await checkAndLoadLicense();
-    if (!accessToken || isTokenExpired(accessToken)) {
-      try {
-        await doHandshake();
-      } catch (e) {}
-    }
 
     const validateUrl = `${VALIDATE_URL}?orgId=${encodeURIComponent(orgId)}`;
     addLog(`GET ${validateUrl}`, "api");
 
-    let res = await fetch(validateUrl, {
-      method: "GET",
-      headers: {
-        Authorization: "Bearer " + accessToken,
-        licenseKey: licenseKey,
-        "ngrok-skip-browser-warning": "69420",
-      },
-    });
-
-    if (res.status === 401) {
-      addLog("Validate returned 401. Refreshing token...", "warn");
-      await doHandshake();
-      res = await fetch(validateUrl, {
-        method: "GET",
-        headers: {
-          Authorization: "Bearer " + accessToken,
-          licenseKey: licenseKey,
-          "ngrok-skip-browser-warning": "69420",
-        },
-      });
-    }
+    const res = await makeAuthorizedGet(validateUrl);
 
     if (!res.ok) {
       const errTxt = await res.text().catch(() => "");

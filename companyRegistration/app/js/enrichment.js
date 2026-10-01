@@ -830,10 +830,46 @@ function displayReport(htmlContent, jobId) {
   } catch (e) {}
 }
 
+function downloadReport() {
+  if (!rawReportHtml) {
+    alert("No report available to download.");
+    return;
+  }
+  try {
+    let filename = "Lead_Intelligence_Report";
+    if (currentLead) {
+      const company = (currentLead.Company || "").trim();
+      const fullName = [currentLead.First_Name, currentLead.Last_Name]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      const identifier = company || fullName;
+      if (identifier) {
+        filename += "_" + identifier.replace(/[^a-zA-Z0-9_-]/g, "_");
+      }
+    } else if (activeJobId) {
+      filename += "_" + activeJobId;
+    }
+    filename += ".html";
+
+    const blob = new Blob([rawReportHtml], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 1000);
+    addLog(`Report downloaded as '${filename}'.`, "success");
+  } catch (err) {
+    addLog("Error downloading report: " + (err.message || err), "error");
+    alert("Failed to download report: " + (err.message || err));
+  }
+}
+
 function copyReport() {
-  if (!rawReportHtml) return;
-  navigator.clipboard
-    .writeText(rawReportHtml)
-    .then(() => alert("Report HTML copied!"))
-    .catch(() => alert("Unable to copy."));
+  downloadReport();
 }

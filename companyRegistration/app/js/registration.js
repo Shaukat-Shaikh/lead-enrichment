@@ -95,6 +95,23 @@ function initRegistrationForm() {
         throw new Error("No licenseKey returned: " + JSON.stringify(regData));
       }
 
+      // If the org is already registered, show a friendly message and stop
+      if (regData.alreadyRegistered) {
+        addLog("Organization is already registered.", "info");
+        statusBox.style.display = "none";
+        var overlay = document.createElement("div");
+        overlay.style.cssText =
+          "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;";
+        overlay.innerHTML =
+          '<div style="background:#fff;border-radius:12px;padding:28px 32px;text-align:center;max-width:340px;box-shadow:0 8px 30px rgba(0,0,0,0.2);"><div style="font-size:2.2rem;margin-bottom:8px;">⚠️</div><strong style="font-size:1.1rem;color:#92400e;">Already Registered</strong><p style="margin:10px 0 0;font-size:0.93rem;color:#78350f;line-height:1.5;">Your organisation is already registered.<br>Please contact the development team.</p></div>';
+        document.body.appendChild(overlay);
+        btn.disabled = false;
+        setTimeout(function () {
+          closeEntireWidget();
+        }, 3000);
+        return;
+      }
+
       addLog(`Registration succeeded! License Key: ${licenseKey}`, "success");
 
       // Execute handshake immediately to get active tokens

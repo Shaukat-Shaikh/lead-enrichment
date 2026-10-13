@@ -145,7 +145,7 @@ async function bootstrap() {
       resolveLeadContext();
       if (currentLeadId) {
         addLog(
-          "License active & Lead detected. Launching Lead Enrichment view.",
+          `License active & ${currentEntity} detected (ID: ${currentLeadId}). Launching Enrichment view.`,
           "success",
         );
         switchView("enrichment");

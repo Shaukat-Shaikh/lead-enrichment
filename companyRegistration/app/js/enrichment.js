@@ -5,25 +5,30 @@
 // ---------------------------------------------------------------
 function resolveLeadContext() {
   currentLeadId = null;
+  currentEntity = "Leads";
   const params = new URLSearchParams(window.location.search);
-  const urlEntity = params.get("entity");
+  const urlEntity = params.get("entity") || "";
 
-  // If entity is explicitly not Leads (e.g. Dynamics360, intelligence__name_of_lead, intelegence__name_of_lead), do not treat as lead
-  if (urlEntity && urlEntity.toLowerCase() !== "leads") {
-    addLog(
-      `Context entity is '${urlEntity}' (not 'Leads'). Skipping Lead ID assignment.`,
-      "info",
-    );
-    return;
+  // Detect entity type from URL params or PageLoad event
+  const pageEntity =
+    (zohoPageData && zohoPageData.Entity) || "";
+  const detectedEntity = urlEntity || pageEntity;
+
+  if (detectedEntity) {
+    addLog(`Detected CRM entity: '${detectedEntity}'`, "info");
   }
 
-  if (
-    zohoPageData &&
-    zohoPageData.Entity &&
-    zohoPageData.Entity.toLowerCase() !== "leads"
-  ) {
+  // Support Leads and Deals
+  const entityLower = detectedEntity.toLowerCase();
+  if (entityLower === "deals") {
+    currentEntity = "Deals";
+    addLog("Entity is 'Deals'. Will resolve Deal context.", "info");
+  } else if (entityLower === "leads" || entityLower === "") {
+    currentEntity = "Leads";
+  } else {
+    // Not Leads or Deals — skip
     addLog(
-      `Zoho PageLoad entity is '${zohoPageData.Entity}' (not 'Leads'). Skipping Lead ID assignment.`,
+      `Context entity is '${detectedEntity}' (not 'Leads' or 'Deals'). Skipping ID assignment.`,
       "info",
     );
     return;
@@ -31,7 +36,10 @@ function resolveLeadContext() {
 
   if (params.get("entityId")) {
     currentLeadId = params.get("entityId");
-    addLog("Lead ID found in URL parameters: " + currentLeadId, "info");
+    addLog(
+      `${currentEntity} ID found in URL parameters: ${currentLeadId}`,
+      "info",
+    );
     return;
   }
 
@@ -39,7 +47,10 @@ function resolveLeadContext() {
     currentLeadId = Array.isArray(zohoPageData.EntityId)
       ? zohoPageData.EntityId[0]
       : zohoPageData.EntityId;
-    addLog("Lead ID found in PageLoad event: " + currentLeadId, "info");
+    addLog(
+      `${currentEntity} ID found in PageLoad event: ${currentLeadId}`,
+      "info",
+    );
     return;
   }
 
@@ -125,6 +136,7 @@ function findJobIdOnLead(lead) {
 async function saveJobIdToLead(jobId) {
   if (!currentLeadId || !jobId) return false;
 
+  const entityName = currentEntity || "Leads";
   const candidateFields = [
     FIELD_LEAD_JOB_ID, // "intelligence360__Intelligence_JobID"
     "intelligence360__Intelligence_JobID",
@@ -132,8 +144,9 @@ async function saveJobIdToLead(jobId) {
     "intelegence__JobID",
   ];
 
-  if (currentLead) {
-    for (const k of Object.keys(currentLead)) {
+  const record = currentEntity === "Deals" ? currentDeal : currentLead;
+  if (record) {
+    for (const k of Object.keys(record)) {
       const lk = k.toLowerCase();
       if (lk.includes("job") || lk.includes("request")) {
         if (!candidateFields.includes(k)) {
@@ -145,9 +158,9 @@ async function saveJobIdToLead(jobId) {
 
   for (const f of candidateFields) {
     try {
-      addLog(`Writing Job ID '${jobId}' to Lead field '${f}'...`, "info");
+      addLog(`Writing Job ID '${jobId}' to ${entityName} field '${f}'...`, "info");
       const res = await ZOHO.CRM.API.updateRecord({
-        Entity: "Leads",
+        Entity: entityName,
         APIData: { id: currentLeadId, [f]: jobId },
         RecordID: currentLeadId,
       });
@@ -156,33 +169,33 @@ async function saveJobIdToLead(jobId) {
         const item = res.data[0];
         if (item.code === "SUCCESS" || item.status === "success") {
           addLog(
-            `Saved Job ID into Lead field '${f}' successfully.`,
+            `Saved Job ID into ${entityName} field '${f}' successfully.`,
             "success",
           );
-          if (currentLead) {
-            currentLead[f] = jobId;
-            currentLead.intelligence360__Intelligence_JobID = jobId;
-            currentLead.intelligence__JobId = jobId;
-            currentLead.intelligence__JobID = jobId;
-            currentLead.intelegence__JobId = jobId;
-            currentLead.intelegence__JobID = jobId;
+          if (record) {
+            record[f] = jobId;
+            record.intelligence360__Intelligence_JobID = jobId;
+            record.intelligence__JobId = jobId;
+            record.intelligence__JobID = jobId;
+            record.intelegence__JobId = jobId;
+            record.intelegence__JobID = jobId;
           }
           return true;
         } else {
           addLog(
-            `Lead field '${f}' update response: ${item.code} (${item.message || JSON.stringify(item.details || "")})`,
+            `${entityName} field '${f}' update response: ${item.code} (${item.message || JSON.stringify(item.details || "")})`,
             "warn",
           );
         }
       } else {
         addLog(
-          `Unexpected response updating Lead field '${f}': ${JSON.stringify(res)}`,
+          `Unexpected response updating ${entityName} field '${f}': ${JSON.stringify(res)}`,
           "warn",
         );
       }
     } catch (e) {
       addLog(
-        `Exception updating Lead field '${f}': ${e.message || JSON.stringify(e)}`,
+        `Exception updating ${entityName} field '${f}': ${e.message || JSON.stringify(e)}`,
         "warn",
       );
     }
@@ -214,54 +227,135 @@ async function startEnrichment(forceNew = false) {
   document.getElementById("statusBadge").textContent = "In Progress";
   document.getElementById("statusBadge").className = "badge badge-progress";
 
-  addLog(`Beginning Lead Enrichment process (forceNew=${forceNew})...`, "info");
+  addLog(`Beginning Enrichment process (forceNew=${forceNew}, entity=${currentEntity})...`, "info");
 
   try {
-    // Resolve Lead context
+    // Resolve context (Leads or Deals)
     resolveLeadContext();
     addLog(
-      "Resolved Lead ID context: " + (currentLeadId || "None found"),
+      `Resolved context: entity=${currentEntity}, recordId=${currentLeadId || "None found"}`,
       currentLeadId ? "success" : "warn",
     );
 
     if (!currentLeadId) {
       throw new Error(
-        "No Lead record detected. Please launch this widget from a Lead record's 'Lead Enrichment' button.",
+        `No ${currentEntity} record detected. Please launch this widget from a ${currentEntity} record's button.`,
       );
     }
 
-    // Fetch full lead details
-    addLog(
-      `Calling ZOHO.CRM.API.getRecord for Lead ID: ${currentLeadId}...`,
-      "info",
-    );
-    const leadRes = await ZOHO.CRM.API.getRecord({
-      Entity: "Leads",
-      RecordID: currentLeadId,
-    });
-    if (!leadRes || !leadRes.data || !leadRes.data[0]) {
-      throw new Error(
-        "Could not retrieve Lead details for record ID: " + currentLeadId,
+    let firstName = "";
+    let lastName = "";
+    let fullName = "";
+    let company = "No Company";
+    let email = "No Email";
+    let title = "";
+    let recordForJobId = null;
+
+    if (currentEntity === "Deals") {
+      // ----- DEALS FLOW -----
+      addLog(`Calling ZOHO.CRM.API.getRecord for Deal ID: ${currentLeadId}...`, "info");
+      const dealRes = await ZOHO.CRM.API.getRecord({
+        Entity: "Deals",
+        RecordID: currentLeadId,
+      });
+      if (!dealRes || !dealRes.data || !dealRes.data[0]) {
+        throw new Error("Could not retrieve Deal details for record ID: " + currentLeadId);
+      }
+      currentDeal = dealRes.data[0];
+      recordForJobId = currentDeal;
+
+      const dealName = currentDeal.Deal_Name || "Deal #" + currentLeadId;
+      addLog(`Deal record loaded: '${dealName}'`, "info");
+      addLog(`Deal fields available: [${Object.keys(currentDeal).join(", ")}]`, "info");
+
+      // --- Resolve Company from associated Account_Name ---
+      const accountLookup = currentDeal.Account_Name;
+      if (accountLookup && typeof accountLookup === "object" && accountLookup.id) {
+        addLog(`Deal has associated Account ID: ${accountLookup.id} (name: ${accountLookup.name || "N/A"})`, "info");
+        company = accountLookup.name || "No Company";
+      } else if (accountLookup && typeof accountLookup === "string") {
+        company = accountLookup;
+        addLog(`Deal Account_Name is a string: '${company}'`, "info");
+      } else {
+        addLog("Deal has no associated Account_Name. Company will be 'No Company'.", "warn");
+      }
+
+      // --- Resolve Contact details from associated Contact_Name ---
+      const contactLookup = currentDeal.Contact_Name;
+      if (contactLookup && typeof contactLookup === "object" && contactLookup.id) {
+        addLog(`Deal has associated Contact ID: ${contactLookup.id} (name: ${contactLookup.name || "N/A"}). Fetching full Contact record...`, "info");
+        try {
+          const contactRes = await ZOHO.CRM.API.getRecord({
+            Entity: "Contacts",
+            RecordID: contactLookup.id,
+          });
+          if (contactRes && contactRes.data && contactRes.data[0]) {
+            const contact = contactRes.data[0];
+            firstName = contact.First_Name || "";
+            lastName = contact.Last_Name || "";
+            email = contact.Email || "No Email";
+            title = contact.Title || contact.Designation || "";
+            addLog(
+              `[DEAL ENRICHMENT] Contact resolved → First_Name: '${firstName}', Last_Name: '${lastName}', Email: '${email}', Title: '${title}'`,
+              "success",
+            );
+          } else {
+            addLog(`Contact record ${contactLookup.id} returned no data.`, "warn");
+          }
+        } catch (contactErr) {
+          addLog(`Failed to fetch Contact ${contactLookup.id}: ${contactErr.message || contactErr}`, "warn");
+          // Fallback: use the contact name from the lookup
+          const parts = (contactLookup.name || "").split(" ");
+          firstName = parts[0] || "";
+          lastName = parts.slice(1).join(" ") || "";
+          addLog(`Fallback from Contact lookup name: firstName='${firstName}', lastName='${lastName}'`, "info");
+        }
+      } else {
+        addLog("Deal has no associated Contact_Name. Contact details will be empty.", "warn");
+      }
+
+      fullName = (firstName + " " + lastName).trim() || dealName;
+
+      addLog("─────────────────────────────────────────", "info");
+      addLog(`[DEAL ENRICHMENT SUMMARY]`, "info");
+      addLog(`  Deal Name  : ${dealName}`, "info");
+      addLog(`  Company    : ${company}`, "info");
+      addLog(`  First Name : ${firstName}`, "info");
+      addLog(`  Last Name  : ${lastName}`, "info");
+      addLog(`  Email      : ${email}`, "info");
+      addLog(`  Title      : ${title}`, "info");
+      addLog("─────────────────────────────────────────", "info");
+
+    } else {
+      // ----- LEADS FLOW (original) -----
+      addLog(`Calling ZOHO.CRM.API.getRecord for Lead ID: ${currentLeadId}...`, "info");
+      const leadRes = await ZOHO.CRM.API.getRecord({
+        Entity: "Leads",
+        RecordID: currentLeadId,
+      });
+      if (!leadRes || !leadRes.data || !leadRes.data[0]) {
+        throw new Error("Could not retrieve Lead details for record ID: " + currentLeadId);
+      }
+      currentLead = leadRes.data[0];
+      recordForJobId = currentLead;
+
+      addLog(
+        `Lead record loaded. Job ID: "${currentLead[FIELD_LEAD_JOB_ID] || "None"}"`,
+        "info",
+      );
+
+      firstName = currentLead.First_Name || "";
+      lastName = currentLead.Last_Name || "";
+      fullName = (firstName + " " + lastName).trim() || "Lead #" + currentLeadId;
+      company = currentLead.Company || "No Company";
+      email = currentLead.Email || "No Email";
+      title = currentLead.Title || currentLead.Designation || "";
+
+      addLog(
+        `Lead loaded: ${fullName} | Company: ${company} | Email: ${email} | Title: ${title}`,
+        "success",
       );
     }
-    currentLead = leadRes.data[0];
-
-    addLog(
-      `Lead record loaded. Job ID: "${currentLead[FIELD_LEAD_JOB_ID] || "None"}"`,
-      "info",
-    );
-
-    const firstName = currentLead.First_Name || "";
-    const lastName = currentLead.Last_Name || "";
-    const fullName =
-      (firstName + " " + lastName).trim() || "Lead #" + currentLeadId;
-    const company = currentLead.Company || "No Company";
-    const email = currentLead.Email || "No Email";
-
-    addLog(
-      `Lead loaded: ${fullName} | Company: ${company} | Email: ${email}`,
-      "success",
-    );
 
     const leadNameEl = document.getElementById("leadName");
     if (leadNameEl) leadNameEl.textContent = fullName;
@@ -269,12 +363,12 @@ async function startEnrichment(forceNew = false) {
     if (leadSubEl) leadSubEl.textContent = `${company} • ${email}`;
 
     // -------------------------------------------------------------
-    // CHECK IF JOB ID IS ALREADY STORED ON THIS LEAD (intelligence__JobID / intelegence__JobId)
+    // CHECK IF JOB ID IS ALREADY STORED ON THIS RECORD
     // -------------------------------------------------------------
-    const existingJobId = findJobIdOnLead(currentLead);
+    const existingJobId = findJobIdOnLead(recordForJobId);
     if (existingJobId && !forceNew) {
       addLog(
-        `Existing Job ID detected on Lead in '${FIELD_LEAD_JOB_ID}' (${existingJobId}). Skipping POST /requests. Checking status directly...`,
+        `Existing Job ID detected on ${currentEntity} in '${FIELD_LEAD_JOB_ID}' (${existingJobId}). Skipping POST /requests. Checking status directly...`,
         "info",
       );
       activeJobId = existingJobId;
@@ -304,12 +398,12 @@ async function startEnrichment(forceNew = false) {
     const payload = {
       orgId: String(orgId || "ZOHO-ORG"),
       leadId: String(currentLeadId),
-      requestType: "LeadEnrichment",
+      requestType: currentEntity === "Deals" ? "DealEnrichment" : "LeadEnrichment",
       payload: {
         first_name: firstName,
         last_name: lastName,
         email: email,
-        title: currentLead.Title || currentLead.Designation || "",
+        title: title,
         company_name: company,
       },
     };

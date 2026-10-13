@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------
 // CONFIGURATION & CONSTANTS
 // ---------------------------------------------------------------
-const BASE_URL = "https://3d16-49-248-125-98.ngrok-free.app/api/v1";
+const BASE_URL = "https://intelligence360.intelegain.com/api/v1";
 const REGISTER_URL = BASE_URL + "/register";
 const HANDSHAKE_URL = BASE_URL + "/auth/handshake";
 const REQUESTS_URL = BASE_URL + "/requests";

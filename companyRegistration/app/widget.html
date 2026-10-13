@@ -9,7 +9,7 @@
   <body>
     <div class="container">
       <!-- Navigation Bar -->
-      <div class="top-nav">
+      <div class="top-nav" id="topNav" style="display: none">
         <div class="brand-title">
           Intelligence 360
           <span class="brand-badge">SaaS</span>
@@ -56,20 +56,12 @@
 
       <!-- VIEW 2: LEAD ENRICHMENT -->
       <div id="enrichmentView" class="view-section">
-        <div class="header-card">
+        <div class="header-card" id="leadHeaderCard" style="display: none">
           <div class="lead-info">
             <h2 id="leadName">Loading Lead...</h2>
             <p id="leadSub">Preparing intelligence request</p>
           </div>
           <div style="display: flex; align-items: center; gap: 10px">
-            <button
-              id="btnViewCredits"
-              class="btn-credits"
-              onclick="openCreditsDashboard()"
-              title="View license credit balance and usage"
-            >
-              💳 View Credits
-            </button>
             <div id="statusBadge" class="badge badge-progress">
               Initializing
             </div>
@@ -216,6 +208,14 @@
           <div class="report-header">
             <div class="report-title">Lead Intelligence Report</div>
             <div class="report-actions">
+              <button
+                id="btnViewCredits"
+                class="btn-credits"
+                onclick="openCreditsDashboard()"
+                title="View license credit balance and usage"
+              >
+                💳 Credits
+              </button>
               <button onclick="downloadReport()">Download Report</button>
               <button onclick="startEnrichment(true)">Re-Run Analysis</button>
             </div>

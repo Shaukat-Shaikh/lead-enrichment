@@ -34,6 +34,11 @@ function switchView(viewName) {
   document.getElementById("registrationView").style.display =
     viewName === "registration" ? "block" : "none";
 
+  const topNav = document.getElementById("topNav") || document.querySelector(".top-nav");
+  if (topNav) {
+    topNav.style.display = viewName === "enrichment" ? "none" : (viewName === "registration" ? "flex" : "none");
+  }
+
   updateNavState();
 }
 

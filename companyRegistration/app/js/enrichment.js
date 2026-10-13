@@ -263,8 +263,10 @@ async function startEnrichment(forceNew = false) {
       "success",
     );
 
-    document.getElementById("leadName").textContent = fullName;
-    document.getElementById("leadSub").textContent = `${company} • ${email}`;
+    const leadNameEl = document.getElementById("leadName");
+    if (leadNameEl) leadNameEl.textContent = fullName;
+    const leadSubEl = document.getElementById("leadSub");
+    if (leadSubEl) leadSubEl.textContent = `${company} • ${email}`;
 
     // -------------------------------------------------------------
     // CHECK IF JOB ID IS ALREADY STORED ON THIS LEAD (intelligence__JobID / intelegence__JobId)
@@ -753,6 +755,11 @@ function displayReport(htmlContent, jobId) {
   document.getElementById("rawResultCard").style.display = "none";
   document.getElementById("reportCard").style.display = "block";
 
+  const topNav = document.getElementById("topNav") || document.querySelector(".top-nav");
+  if (topNav) topNav.style.display = "none";
+  const headerCard = document.getElementById("leadHeaderCard") || document.querySelector(".header-card");
+  if (headerCard) headerCard.style.display = "none";
+
   const statusBadge = document.getElementById("statusBadge");
   if (statusBadge) {
     statusBadge.textContent = "Completed";
@@ -768,12 +775,13 @@ function displayReport(htmlContent, jobId) {
       if (!d || !d.body) return;
 
       const header = d.querySelector(".brandbar");
+      if (header) header.style.display = "none";
       const report = d.querySelector(".report");
       const footer = d.querySelector(".brandfoot") || d.querySelector("footer");
 
       let totalHeight = 0;
       if (report) {
-        const headerH = header ? header.offsetHeight : 0;
+        const headerH = header && header.style.display !== "none" ? header.offsetHeight : 0;
         const reportH = report.offsetHeight || 0;
         const footerH = footer ? footer.offsetHeight : 0;
         totalHeight = headerH + reportH + footerH + 20;
@@ -794,6 +802,11 @@ function displayReport(htmlContent, jobId) {
   doc.open();
   doc.write(htmlContent);
   doc.close();
+
+  try {
+    const brandbar = doc.querySelector(".brandbar");
+    if (brandbar) brandbar.style.display = "none";
+  } catch (e) {}
 
   try {
     if (doc.documentElement) doc.documentElement.style.overflow = "hidden";

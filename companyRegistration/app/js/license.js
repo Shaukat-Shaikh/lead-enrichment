@@ -11,7 +11,9 @@ async function checkAndLoadLicense() {
   licenseRecordId = null;
 
   const moduleCandidates = [
-    CRM_LICENSE_MODULE, // "intelligence360__Intelligence_360"
+    CRM_LICENSE_MODULE, // "intelligence360zoho__Intelligence_360"
+    "intelligence360__Intelligence_360",
+    "Intelligence_360",
     CRM_LICENSE_MODULE_FALLBACK, // "intelligence__name_of_lead"
     "intelegence__name_of_lead",
   ];
@@ -117,10 +119,10 @@ async function checkAndLoadLicense() {
           } catch (e) {}
         }
 
-        // Search for license key field (primary: intelligence360__Enrichment_License, intelligence__enrichment_license, intelegence__enrichment_lisense)
+        // Search for license key field (primary: intelligence360zoho__Enrichment_License, intelligence__enrichment_license, intelegence__enrichment_lisense)
         let foundLic =
           fullRec[FIELD_LICENSE_KEY] ||
-          fullRec["intelligence360__Enrichment_License"] ||
+          fullRec["intelligence360zoho__Enrichment_License"] ||
           fullRec["intelligence__enrichment_license"] ||
           fullRec["intelegence__enrichment_lisense"] ||
           fullRec["intelegence__enrichment_license"] ||
@@ -173,7 +175,7 @@ async function checkAndLoadLicense() {
         // Load access token from CRM record
         accessToken =
           fullRec[FIELD_ACCESS_TOKEN] ||
-          fullRec["intelligence360__Access_Token"] ||
+          fullRec["intelligence360zoho__Access_Token"] ||
           fullRec["intelligence__access_token"] ||
           fullRec["intelegence__access_token"] ||
           fullRec["intelligence__Access_Token"] ||
@@ -194,7 +196,7 @@ async function checkAndLoadLicense() {
         // Load refresh token from CRM record
         refreshToken =
           fullRec[FIELD_REFRESH_TOKEN] ||
-          fullRec["intelligence360__Refresh_Token"] ||
+          fullRec["intelligence360zoho__Refresh_Token"] ||
           fullRec["intelligence__refresh_token"] ||
           fullRec["intelegence__refresh_token"] ||
           fullRec["intelligence__Refresh_Token"] ||
@@ -215,8 +217,8 @@ async function checkAndLoadLicense() {
         // Load Organization ID from CRM record
         const recOrgId =
           fullRec[FIELD_ORG_ID] ||
-          fullRec["intelligence360__Organisation_ID"] ||
-          fullRec["intelligence360__Organization_ID"] ||
+          fullRec["intelligence360zoho__Organisation_ID"] ||
+          fullRec["intelligence360zoho__Organization_ID"] ||
           fullRec["intelligence__Organisation_ID"] ||
           fullRec["intelligence__Organization_ID"] ||
           fullRec["intelegence__Organisation_ID"] ||

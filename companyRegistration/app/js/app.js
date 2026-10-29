@@ -136,7 +136,7 @@ async function bootstrap() {
       );
     }
 
-    // Check if License exists in Zoho CRM module intelligence360__Intelligence_360
+    // Check if License exists in Zoho CRM module intelligence360zoho__Intelligence_360
     addLog("Checking CRM for existing license key...", "info");
     const hasLicense = await checkAndLoadLicense();
     updateNavState();

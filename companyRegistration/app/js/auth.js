@@ -51,7 +51,7 @@ async function saveTokensToCrm(newAccessToken, newRefreshToken, currentOrgId) {
   if (licenseKey && String(licenseKey).trim().startsWith("LIC-")) {
     const licFieldCandidates = [
       FIELD_LICENSE_KEY,
-      "intelligence360__Enrichment_License",
+      "intelligence360zoho__Enrichment_License",
     ];
     let licSaved = false;
     for (const f of licFieldCandidates) {
@@ -138,8 +138,8 @@ async function saveTokensToCrm(newAccessToken, newRefreshToken, currentOrgId) {
   if (currentOrgId) {
     const orgFieldCandidates = [
       FIELD_ORG_ID,
-      "intelligence360__Organisation_ID",
-      "intelligence360__Organization_ID",
+      "intelligence360zoho__Organisation_ID",
+      "intelligence360zoho__Organization_ID",
       "intelligence__Organisation_ID",
       "intelegence__Organisation_ID",
     ];
@@ -182,7 +182,7 @@ async function saveTokensToCrm(newAccessToken, newRefreshToken, currentOrgId) {
   if (newRefreshToken) {
     const refreshCandidates = [
       FIELD_REFRESH_TOKEN,
-      "intelligence360__Refresh_Token",
+      "intelligence360zoho__Refresh_Token",
       "intelligence__refresh_token",
       "intelegence__refresh_token",
     ];
@@ -225,7 +225,7 @@ async function saveTokensToCrm(newAccessToken, newRefreshToken, currentOrgId) {
   if (newAccessToken) {
     const accessCandidates = [
       FIELD_ACCESS_TOKEN,
-      "intelligence360__Access_Token",
+      "intelligence360zoho__Access_Token",
       "intelligence__access_token",
       "intelegence__access_token",
     ];

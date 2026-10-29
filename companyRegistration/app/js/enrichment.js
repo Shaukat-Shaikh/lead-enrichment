@@ -60,12 +60,12 @@ function resolveLeadContext() {
 function findJobIdOnLead(lead) {
   if (!lead) return null;
 
-  // Exact API field name: intelligence360__Intelligence_JobID
+  // Exact API field name: intelligence360zoho__Intelligence_JobID
   if (
-    lead.intelligence360__Intelligence_JobID &&
-    String(lead.intelligence360__Intelligence_JobID).trim().length > 3
+    lead.intelligence360zoho__Intelligence_JobID &&
+    String(lead.intelligence360zoho__Intelligence_JobID).trim().length > 3
   ) {
-    return String(lead.intelligence360__Intelligence_JobID).trim();
+    return String(lead.intelligence360zoho__Intelligence_JobID).trim();
   }
 
   if (
@@ -104,8 +104,8 @@ function findJobIdOnLead(lead) {
   }
 
   const candidateFields = [
-    FIELD_LEAD_JOB_ID, // "intelligence360__Intelligence_JobID"
-    "intelligence360__Intelligence_JobID",
+    FIELD_LEAD_JOB_ID, // "intelligence360zoho__Intelligence_JobID"
+    "intelligence360zoho__Intelligence_JobID",
     "intelligence__JobID",
     "intelegence__JobID",
   ];
@@ -137,26 +137,36 @@ async function saveJobIdToLead(jobId) {
   if (!currentLeadId || !jobId) return false;
 
   const entityName = currentEntity || "Leads";
+  const primaryField = "intelligence360zoho__Intelligence_JobID";
   const candidateFields = [
-    FIELD_LEAD_JOB_ID, // "intelligence360__Intelligence_JobID"
-    "intelligence360__Intelligence_JobID",
+    primaryField,
+    FIELD_LEAD_JOB_ID, // "intelligence360zoho__Intelligence_JobID"
+    "intelligence360zoho__JobID",
     "intelligence__JobID",
     "intelegence__JobID",
+    "JobID",
   ];
+
+  const uniqueCandidates = [...new Set(candidateFields.filter(Boolean))];
 
   const record = currentEntity === "Deals" ? currentDeal : currentLead;
   if (record) {
     for (const k of Object.keys(record)) {
       const lk = k.toLowerCase();
       if (lk.includes("job") || lk.includes("request")) {
-        if (!candidateFields.includes(k)) {
-          candidateFields.unshift(k);
+        if (!uniqueCandidates.includes(k)) {
+          uniqueCandidates.push(k);
         }
       }
     }
   }
 
-  for (const f of candidateFields) {
+  addLog(
+    `[SAVE JOB ID] Saving Job ID '${jobId}' to ${entityName} (${currentLeadId}). Primary field: '${primaryField}'. Candidate fields: [${uniqueCandidates.join(", ")}]`,
+    "info",
+  );
+
+  for (const f of uniqueCandidates) {
     try {
       addLog(`Writing Job ID '${jobId}' to ${entityName} field '${f}'...`, "info");
       const res = await ZOHO.CRM.API.updateRecord({
@@ -169,21 +179,20 @@ async function saveJobIdToLead(jobId) {
         const item = res.data[0];
         if (item.code === "SUCCESS" || item.status === "success") {
           addLog(
-            `Saved Job ID into ${entityName} field '${f}' successfully.`,
+            `[SUCCESS] Saved Job ID '${jobId}' into ${entityName} field '${f}' successfully.`,
             "success",
           );
           if (record) {
             record[f] = jobId;
-            record.intelligence360__Intelligence_JobID = jobId;
-            record.intelligence__JobId = jobId;
-            record.intelligence__JobID = jobId;
-            record.intelegence__JobId = jobId;
-            record.intelegence__JobID = jobId;
+            record.intelligence360zoho__Intelligence_JobID = jobId;
           }
+          if (currentDeal) currentDeal.intelligence360zoho__Intelligence_JobID = jobId;
+          if (currentLead) currentLead.intelligence360zoho__Intelligence_JobID = jobId;
+          activeJobId = jobId;
           return true;
         } else {
           addLog(
-            `${entityName} field '${f}' update response: ${item.code} (${item.message || JSON.stringify(item.details || "")})`,
+            `${entityName} field '${f}' update response: ${item.code} - ${item.message || JSON.stringify(item.details || "")}`,
             "warn",
           );
         }
@@ -202,7 +211,7 @@ async function saveJobIdToLead(jobId) {
   }
 
   addLog(
-    `Warning: Job ID could not be saved to any Lead candidate field. Available Lead keys: [${currentLead ? Object.keys(currentLead).join(", ") : "none"}]`,
+    `Warning: Job ID could not be saved to any ${entityName} candidate field. Available record keys: [${record ? Object.keys(record).join(", ") : "none"}]`,
     "error",
   );
   return false;
@@ -267,6 +276,32 @@ async function startEnrichment(forceNew = false) {
       const dealName = currentDeal.Deal_Name || "Deal #" + currentLeadId;
       addLog(`Deal record loaded: '${dealName}'`, "info");
       addLog(`Deal fields available: [${Object.keys(currentDeal).join(", ")}]`, "info");
+
+      // Check if Job ID is already present on this Deal (e.g. from a previous request)
+      const existingDealJobId =
+        (currentDeal.intelligence360zoho__Intelligence_JobID && String(currentDeal.intelligence360zoho__Intelligence_JobID).trim()) ||
+        findJobIdOnLead(currentDeal);
+
+      addLog(
+        `[DEAL JOB ID CHECK] ${existingDealJobId ? `Existing Job ID found in 'intelligence360zoho__Intelligence_JobID': '${existingDealJobId}'` : "No Job ID found on Deal (First request)"}`,
+        existingDealJobId ? "success" : "info",
+      );
+
+      if (existingDealJobId && !forceNew) {
+        addLog(
+          `[DEAL SECOND VISIT] Existing Job ID detected on Deal ('${existingDealJobId}'). Skipping new request. Checking status directly...`,
+          "success",
+        );
+        activeJobId = existingDealJobId;
+        const dealNameEl = document.getElementById("leadName");
+        if (dealNameEl) dealNameEl.textContent = dealName;
+        showEnrichmentLoading(
+          "Loading Intelligence Report...",
+          "Checking status and retrieving report...",
+        );
+        await fetchAndShowJobResult(existingDealJobId, dealName);
+        return;
+      }
 
       // --- Resolve Company from associated Account_Name ---
       const accountLookup = currentDeal.Account_Name;
@@ -429,9 +464,12 @@ async function startEnrichment(forceNew = false) {
       if (reqData) {
         if (
           reqData.errorCode === "CREDIT_LIMIT_EXCEEDED" ||
-          (reqData.message && reqData.message.includes("quota exceeded"))
+          reqData.errorCode === "QUOTA_EXCEEDED" ||
+          reqData.errorCode === "INSUFFICIENT_CREDITS" ||
+          (reqData.message && /quota|credit/i.test(reqData.message)) ||
+          (reqText && /quota|credit limit|insufficient credit/i.test(reqText))
         ) {
-          customMsg = `License Quota Exceeded: The credit quota for license key (${licenseKey}) has been reached on the server. Please register a new license or top up credits.`;
+          customMsg = "Your credits are over. Please buy credits for doing enrichment.";
           isQuota = true;
         } else if (reqData.message) {
           customMsg = reqData.message;
@@ -442,10 +480,23 @@ async function startEnrichment(forceNew = false) {
       throw enrichErr;
     }
 
-    const jobId = reqData && (reqData.jobId || reqData.requestId || reqData.id);
+    const jobId =
+      (reqData &&
+        (reqData.jobId ||
+          reqData.requestId ||
+          reqData.id ||
+          (reqData.data &&
+            (reqData.data.jobId ||
+              reqData.data.requestId ||
+              reqData.data.id)))) ||
+      "";
 
-    // Save jobId to Lead record field 'intelligence__JobID' / 'intelegence__JobId' immediately
+    // Save jobId to CRM record field 'intelligence360zoho__Intelligence_JobID' immediately
     if (jobId) {
+      addLog(
+        `[FIRST REQUEST COMPLETE] Received Job ID '${jobId}'. Saving into ${currentEntity} field 'intelligence360zoho__Intelligence_JobID'...`,
+        "info",
+      );
       await saveJobIdToLead(jobId);
     }
 
@@ -476,8 +527,11 @@ async function startEnrichment(forceNew = false) {
     document.getElementById("statusBadge").className = "badge badge-error";
 
     if (err.isQuota) {
-      showError(err.message, "Quota Exceeded", "Register New License", () =>
-        switchView("registration"),
+      showError(
+        "Your credits are over. Please buy credits for doing enrichment.",
+        "Credits Over",
+        "View Credits",
+        () => openCreditsDashboard(),
       );
     } else {
       showError(
@@ -550,8 +604,8 @@ function showQueuedNotice(jobId, fullName) {
 
   const badgeEl = document.getElementById("queuedJobIdBadge");
   if (badgeEl) {
-    badgeEl.textContent = `Job ID: ${jobId || "N/A"}`;
-    badgeEl.style.display = jobId ? "inline-block" : "none";
+    badgeEl.textContent = "";
+    badgeEl.style.display = "none";
   }
 
   const btn = document.getElementById("btnPollStatus");

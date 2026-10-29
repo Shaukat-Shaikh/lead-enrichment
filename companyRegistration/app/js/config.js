@@ -11,18 +11,18 @@ const REFRESH_URL = BASE_URL + "/auth/refresh";
 const VALIDATE_URL = BASE_URL + "/license/validate";
 
 // Exact CRM Module & Field API Names as defined in Zoho CRM Developer Console
-const CRM_LICENSE_MODULE = "intelligence360__Intelligence_360";
+const CRM_LICENSE_MODULE = "intelligence360zoho__Intelligence_360";
 const CRM_LICENSE_MODULE_FALLBACK = "intelligence__name_of_lead";
 const LICENSE_RECORD_NAME = "lisense key";
 
-const FIELD_LICENSE_KEY = "intelligence360__Enrichment_License";
+const FIELD_LICENSE_KEY = "intelligence360zoho__Enrichment_License";
 const FIELD_LICENSE_KEY_FALLBACK = "intelligence__enrichment_license";
-const FIELD_ACCESS_TOKEN = "intelligence360__Access_Token";
-const FIELD_REFRESH_TOKEN = "intelligence360__Refresh_Token";
-const FIELD_ORG_ID = "intelligence360__Organisation_ID";
+const FIELD_ACCESS_TOKEN = "intelligence360zoho__Access_Token";
+const FIELD_REFRESH_TOKEN = "intelligence360zoho__Refresh_Token";
+const FIELD_ORG_ID = "intelligence360zoho__Organisation_ID";
 
 // Exact Lead Module field for Job ID
-const FIELD_LEAD_JOB_ID = "intelligence360__Intelligence_JobID";
+const FIELD_LEAD_JOB_ID = "intelligence360zoho__Intelligence_JobID";
 
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLL_ATTEMPTS = 40;

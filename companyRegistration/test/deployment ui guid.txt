@@ -1,0 +1,54 @@
+========================================================================
+EXTENSION DEPLOYMENT & SCHEMA SPECIFICATION (ZOHO DEVELOPER CONSOLE)
+========================================================================
+
+EXTENSION UNIQUE NAME / NAMESPACE:
+  intelligence360zoho
+
+------------------------------------------------------------------------
+1. CUSTOM MODULE:
+------------------------------------------------------------------------
+  Module Label: Intelligence 360
+  Module Plural: Intelligence 360
+  Generated API Name: intelligence360zoho__Intelligence_360
+
+------------------------------------------------------------------------
+2. FIELDS UNDER "Intelligence 360" MODULE:
+------------------------------------------------------------------------
+  - Access Token
+      Type: Multi Line (Large)  [Text Area - needed for long JWT tokens]
+      API Name: intelligence360zoho__Access_Token
+
+  - Enrichment License
+      Type: Multi Line (Large) or Single Line
+      API Name: intelligence360zoho__Enrichment_License
+
+  - Organisation ID
+      Type: Single Line
+      API Name: intelligence360zoho__Organisation_ID
+
+  - Refresh Token
+      Type: Multi Line (Large) or Single Line
+      API Name: intelligence360zoho__Refresh_Token
+
+------------------------------------------------------------------------
+3. FIELDS UNDER "Leads" MODULE:
+------------------------------------------------------------------------
+  - Intelligence JobID
+      Type: Single Line
+      API Name: intelligence360zoho__Intelligence_JobID
+
+------------------------------------------------------------------------
+4. FIELDS UNDER "Deals" MODULE:
+------------------------------------------------------------------------
+  - Intelligence JobID
+      Type: Single Line
+      API Name: intelligence360zoho__Intelligence_JobID
+
+------------------------------------------------------------------------
+5. CUSTOM BUTTONS:
+------------------------------------------------------------------------
+  Go to Settings -> Customization -> Modules and Fields -> Custom Buttons and Links:
+  Create button named "Lead Enrichment":
+    1) Leads -> View Page -> Invoke a Widget -> Widget URL: /app/widget.html
+    2) Deals -> View Page -> Invoke a Widget -> Widget URL: /app/widget.html

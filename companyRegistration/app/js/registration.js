@@ -62,11 +62,7 @@ function initRegistrationForm() {
         idealCustomerProfile: document.getElementById("idealCustomerProfile")
           ? document.getElementById("idealCustomerProfile").value.trim()
           : "",
-        uniqueValueProposition: document.getElementById(
-          "uniqueValueProposition",
-        )
-          ? document.getElementById("uniqueValueProposition").value.trim()
-          : "",
+        uniqueValueProposition: "",
         language:
           (document.getElementById("language") &&
             document.getElementById("language").value) ||
